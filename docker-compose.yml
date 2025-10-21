@@ -1,0 +1,189 @@
+services:
+  # --- 1. Cluster de Computação Spark ---
+  spark-base:
+    build:
+      context: ./spark-base
+      dockerfile: Dockerfile
+    image: spark-base:latest
+    container_name: spark-base
+
+  spark-master:
+    build:
+      context: ./spark-master
+      dockerfile: Dockerfile
+    container_name: spark-master
+    ports:
+      - "8081:8080"
+      # Porta do Spark Master para comunicação com workers e drivers
+      - "7077:7077"
+    networks:
+      - data-net
+
+  spark-worker-01:
+    build:
+      context: ./spark-worker
+      dockerfile: Dockerfile
+    container_name: spark-worker-01
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_WORKER_CORES=4
+      - SPARK_WORKER_MEMORY=4g
+    ports:
+      # Porta da UI do Spark Worker
+      - "8082:8081"
+    command: ["bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    networks:
+      - data-net
+
+  spark-worker-02:
+    build:
+      context: ./spark-worker
+      dockerfile: Dockerfile
+    container_name: spark-worker-02
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_WORKER_CORES=4
+      - SPARK_WORKER_MEMORY=4g
+    ports:
+      # Porta da UI do Spark Worker
+      - "8083:8081"
+    command: ["bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    networks:
+      - data-net
+  # --- 0. Serviço para construir nossa imagem de notebook customizada ---
+  jupyter-notebook:
+    build:
+      context: ./jupyterhub
+      dockerfile: Dockerfile
+    container_name: jupyter-notebook
+    image: pyspark-notebook:latest # Damos um nome para a imagem construída
+    ports:
+      - 8888:8888
+      - 4040:4040
+    volumes:
+      - ./notebooks:/opt/workspace
+    environment:
+      - GRANT_SUDO=yes
+    networks:
+      - data-net
+  # # --- 1. Armazenamento (Data Lake) ---
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: minio
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   environment:
+  #     - MINIO_ROOT_USER=admin
+  #     - MINIO_ROOT_PASSWORD=mysecretpassword
+  #   command: server /data --console-address ":9001"
+  #   volumes:
+  #     - minio_data:/data
+  #   networks:
+  #     - data-net
+
+  # # --- 2. Banco de Dados para o MLflow ---
+  # postgres-db:
+  #   image: postgres:16
+  #   container_name: mlflow_postgres
+  #   environment:
+  #     - POSTGRES_USER=mlflow
+  #     - POSTGRES_PASSWORD=mysecretpassword
+  #     - POSTGRES_DB=mlflow
+  #   volumes:
+  #     - postgres_mlflow_data:/var/lib/postgresql/data
+  #   networks:
+  #     - data-net
+
+  # # --- 3. Servidor de Machine Learning Lifecycle ---
+  # mlflow:
+  #   # The 'image:' line is replaced by the 'build:' block below
+  #   build:
+  #     context: ./mlflow
+  #     dockerfile: Dockerfile
+  #   container_name: mlflow
+  #   depends_on:
+  #     - postgres-db
+  #     - minio
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - AWS_ACCESS_KEY_ID=admin
+  #     - AWS_SECRET_ACCESS_KEY=mysecretpassword
+  #     - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+  #   command: >
+  #     mlflow server
+  #     --backend-store-uri postgresql://mlflow:mysecretpassword@postgres-db:5432/mlflow
+  #     --default-artifact-root s3://mlflow-artifacts/
+  #     --host 0.0.0.0
+  #   networks:
+  #     - data-net
+
+# ... (spark-master service) ...
+
+  # # --- 4. Cluster de Computação Spark (com imagens BDE) ---
+  # spark-master:
+  #   image: bde2020/spark-master:3.3.0-hadoop3.3 # <-- MUDOU AQUI
+  #   container_name: spark-master
+  #   ports:
+  #     - "8081:8080"
+  #     - "7077:7077"
+  #   networks:
+  #     - data-net
+
+
+  # # --- 5. Interface de Notebooks Colaborativos ---
+  # jupyterhub:
+  #   build:
+  #     context: ./jupyterhub
+  #     dockerfile: Dockerfile
+  #   container_name: jupyterhub
+  #   depends_on:
+  #     - spark-master
+  #   ports:
+  #     - "8080:8000"
+  #     - "8088:8081"
+  #   environment: 
+  #     - JUPYTERHUB_CRYPT_KEY=19e1397a2f9aa0b80f13077136706a2a707a206a7a501a428402a3d0da61423b
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ./jupyterhub:/srv/jupyterhub/config
+  #     - ./jupyter_notebooks:/home/jovyan/work
+  #   networks:
+  #     - data-net
+  #   command: jupyterhub -f /srv/jupyterhub/config/jupyterhub_config.py
+
+# ... (resto do arquivo)
+  # jupyterhub:
+  #   # A linha 'image:' foi removida e substituída pelo 'build:'
+  #   build:
+  #     context: ./jupyterhub
+  #     dockerfile: Dockerfile
+  #   container_name: jupyterhub
+  #   depends_on:
+  #     - spark-master
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ./jupyterhub:/srv/jupyterhub/config
+  #     - ./notebooks:/srv/jupyterhub/notebooks
+  #   networks:
+  #     - data-net
+  #   command: jupyterhub -f /srv/jupyterhub/config/jupyterhub_config.py
+
+# --- Redes e Volumes ---
+networks:
+  data-net:
+    driver: bridge
+
+volumes:
+  minio_data:
+  postgres_mlflow_data: 
+  shared-workspace:
