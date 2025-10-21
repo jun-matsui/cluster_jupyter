@@ -1,0 +1,10 @@
+{
+  "JupyterAI": {
+    "model_provider_id": "@jupyter-ai/ollama-chat:ollama",
+    "language_model_id": "ollama:codellama:latest",
+    "embeddings_model_id": "ollama:codellama:latest",
+    "OllamaChatProvider": {
+      "serverUrl": "http://host.docker.internal:11434"
+    }
+  }
+}
