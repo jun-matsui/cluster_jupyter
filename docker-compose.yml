@@ -12,6 +12,7 @@ services:
       --ServerApp.token='' --ServerApp.password=''"
     ports:
       - "9090:8080" # UI do Spark Master
+      - "4040:4040" # UI do Job
       - "7077:7077" # Porta de comunicação do Master com os Workers
       - "8888:8888" # Porta do Jupyter Lab
     volumes:
