@@ -1,0 +1,4 @@
+minio_data
+metastore_db
+notebooks/.ipynb_checkpoints
+notebooks/dados
